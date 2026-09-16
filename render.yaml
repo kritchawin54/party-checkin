@@ -3,5 +3,8 @@ services:
     name: party-checkin
     runtime: node
     buildCommand: npm install && npm run build
-    startCommand: node server.mjs
+    startCommand: node --experimental-strip-types server.mjs
     plan: free
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
