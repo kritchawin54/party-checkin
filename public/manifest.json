@@ -1,0 +1,16 @@
+{
+  "name": "งานเลี้ยง ปาร์ตี้ หน้ากากทักซิโด ยินดีตำแหน่งใหม่ รองด้วง ใหญ่กว่าเดิม",
+  "short_name": "รองด้วง",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ff2d7b",
+  "theme_color": "#ff2d7b",
+  "lang": "th",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

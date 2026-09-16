@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: party-checkin
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: node server.mjs
+    plan: free

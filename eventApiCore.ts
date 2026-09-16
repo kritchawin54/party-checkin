@@ -1,0 +1,265 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { DEFAULT_SETTINGS, type AppState, type Guest, type Prize } from "./src/types";
+
+const DATA_DIR = path.resolve("data");
+const DATA_FILE = path.join(DATA_DIR, "event.json");
+const PUBLIC_FILE = path.join(DATA_DIR, "public-url.txt");
+
+export function emptyState(): AppState {
+  return {
+    settings: { ...DEFAULT_SETTINGS },
+    guests: [],
+    teams: [],
+    prizes: [],
+    raffleWinners: [],
+    updatedAt: Date.now(),
+  };
+}
+
+export function readState(): AppState {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return emptyState();
+    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8")) as AppState;
+    return {
+      ...emptyState(),
+      ...parsed,
+      settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+      guests: parsed.guests ?? [],
+      teams: parsed.teams ?? [],
+      prizes: parsed.prizes ?? [],
+      raffleWinners: parsed.raffleWinners ?? [],
+    };
+  } catch {
+    return emptyState();
+  }
+}
+
+export function writeState(state: AppState) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(DATA_FILE, JSON.stringify({ ...state, updatedAt: Date.now() }, null, 2), "utf8");
+}
+
+export function readPublicUrlFile(): string {
+  try {
+    return fs.existsSync(PUBLIC_FILE) ? fs.readFileSync(PUBLIC_FILE, "utf8").trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+export function writePublicUrlFile(url: string) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(PUBLIC_FILE, url.trim(), "utf8");
+}
+
+function lanAddresses() {
+  const out: { name: string; address: string }[] = [];
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+    for (const addr of addrs ?? []) {
+      const v4 = addr.family === "IPv4" || (addr.family as unknown) === 4;
+      if (!v4 || addr.internal) continue;
+      if (addr.address.startsWith("169.254.")) continue;
+      out.push({ name, address: addr.address });
+    }
+  }
+  return out.sort((a, b) => score(b.address) - score(a.address));
+}
+
+function score(ip: string) {
+  if (ip.startsWith("192.168.")) return 3;
+  if (ip.startsWith("10.")) return 2;
+  return 1;
+}
+
+function joinUrl(base: string) {
+  const clean = base.replace(/\/+$/, "");
+  return `${clean}/join`;
+}
+
+function isLocalHost(host: string) {
+  const h = host.split(":")[0];
+  return h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]";
+}
+
+export function collectJoinUrls(req: IncomingMessage, port: number, state: AppState) {
+  const urls: { name: string; url: string }[] = [];
+  const seen = new Set<string>();
+  const add = (name: string, url: string) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    urls.push({ name, url });
+  };
+
+  const host = String(req.headers.host || "");
+  const proto = String(req.headers["x-forwarded-proto"] || "").split(",")[0] || (isLocalHost(host) ? "http" : "https");
+  if (host && !isLocalHost(host)) add("อินเทอร์เน็ต", joinUrl(`${proto}://${host}`));
+
+  const fromEnv = process.env.PUBLIC_URL?.trim() || "";
+  if (fromEnv) add("PUBLIC_URL", joinUrl(fromEnv));
+  if (state.settings.publicUrl) add("ลิงก์ที่ตั้งไว้", joinUrl(state.settings.publicUrl));
+  const fromFile = readPublicUrlFile();
+  if (fromFile) add("ลิงก์สาธารณะ", joinUrl(fromFile));
+
+  for (const item of lanAddresses()) {
+    add(item.name, `http://${item.address}:${port}/join`);
+  }
+  if (host) add("เครื่องนี้", joinUrl(`${proto}://${host}`));
+  return urls;
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+export function sendJson(res: ServerResponse, status: number, data: unknown) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.end(JSON.stringify(data));
+}
+
+let queue: Promise<unknown> = Promise.resolve();
+const withLock = <T>(fn: () => T | Promise<T>) => {
+  const run = queue.then(fn, fn);
+  queue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+};
+
+export async function handleApi(
+  req: IncomingMessage,
+  res: ServerResponse,
+  port: number,
+): Promise<boolean> {
+  const url = req.url?.split("?")[0] ?? "";
+  if (req.method === "OPTIONS" && url.startsWith("/api/")) {
+    sendJson(res, 204, {});
+    return true;
+  }
+  if (!url.startsWith("/api/")) return false;
+
+  if (url === "/api/info" && req.method === "GET") {
+    const state = readState();
+    sendJson(res, 200, {
+      eventName: state.settings.eventName,
+      guestCount: state.guests.length,
+      prizeCount: state.prizes.length,
+      urls: collectJoinUrls(req, port, state),
+    });
+    return true;
+  }
+
+  if (url === "/api/state" && req.method === "GET") {
+    sendJson(res, 200, readState());
+    return true;
+  }
+
+  if (url === "/api/state" && req.method === "PUT") {
+    const body = JSON.parse(await readBody(req)) as AppState;
+    await withLock(() => writeState({ ...emptyState(), ...body }));
+    sendJson(res, 200, readState());
+    return true;
+  }
+
+  if (url === "/api/public-url" && req.method === "POST") {
+    const body = JSON.parse(await readBody(req)) as { url?: string };
+    const next = String(body.url || "").trim().replace(/\/+$/, "");
+    writePublicUrlFile(next);
+    const state = readState();
+    state.settings.publicUrl = next;
+    writeState(state);
+    sendJson(res, 200, { url: next });
+    return true;
+  }
+
+  if (url === "/api/guests" && req.method === "POST") {
+    const guest = JSON.parse(await readBody(req)) as Guest;
+    if (!guest?.firstName || !guest?.lastName || !guest?.nickname || !guest?.rank) {
+      sendJson(res, 400, { error: "กรอกชื่อ นามสกุล ชื่อเล่น และตำแหน่งให้ครบ" });
+      return true;
+    }
+    await withLock(() => {
+      const state = readState();
+      const phone = (guest.phone || "").replace(/\D/g, "");
+      const first = guest.firstName.trim().toLowerCase();
+      const last = guest.lastName.trim().toLowerCase();
+      const nick = guest.nickname.trim().toLowerCase();
+      const dup = state.guests.find((g) => {
+        const gPhone = (g.phone || "").replace(/\D/g, "");
+        if (phone && gPhone && gPhone === phone) return true;
+        return (
+          g.firstName.trim().toLowerCase() === first &&
+          g.lastName.trim().toLowerCase() === last &&
+          (g.nickname || "").trim().toLowerCase() === nick
+        );
+      });
+      if (dup) {
+        sendJson(res, 409, { error: "รายชื่อนี้ลงทะเบียนแล้ว", guest: dup });
+        return;
+      }
+      state.guests.push(guest);
+      writeState(state);
+      sendJson(res, 201, guest);
+    });
+    return true;
+  }
+
+  if (url === "/api/prizes" && req.method === "GET") {
+    const state = readState();
+    sendJson(
+      res,
+      200,
+      state.prizes.map((p) => ({
+        id: p.id,
+        name: p.name,
+        quantity: p.quantity,
+        sponsorName: p.sponsorName || "",
+        sponsorOrg: p.sponsorOrg || "",
+        note: p.note || "",
+        source: p.source || "staff",
+      })),
+    );
+    return true;
+  }
+
+  if (url === "/api/prizes" && req.method === "POST") {
+    const prize = JSON.parse(await readBody(req)) as Prize;
+    if (!prize?.name || !prize?.sponsorName) {
+      sendJson(res, 400, { error: "กรอกชื่อของรางวัล และชื่อผู้สนับสนุนให้ครบ" });
+      return true;
+    }
+    const next: Prize = {
+      id: prize.id || `prize-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: String(prize.name).trim(),
+      quantity: Math.max(1, Math.round(Number(prize.quantity) || 1)),
+      sponsorName: String(prize.sponsorName).trim(),
+      sponsorOrg: String(prize.sponsorOrg || "").trim(),
+      sponsorPhone: String(prize.sponsorPhone || "").trim(),
+      note: String(prize.note || "").trim(),
+      source: prize.source === "staff" ? "staff" : "sponsor",
+      createdAt: prize.createdAt || new Date().toISOString(),
+    };
+    await withLock(() => {
+      const state = readState();
+      state.prizes.push(next);
+      writeState(state);
+      sendJson(res, 201, next);
+    });
+    return true;
+  }
+
+  sendJson(res, 404, { error: "not found" });
+  return true;
+}
