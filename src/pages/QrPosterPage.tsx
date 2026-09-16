@@ -87,13 +87,15 @@ export default function QrPosterPage() {
 
         <div className="poster-qr gala-ticket">
           <div className="ticket-seal">บัตรเข้างาน</div>
-          {qr ? <img src={qr} alt="QR ลงทะเบียนร่วมงาน" /> : <div className="empty">กำลังสร้าง QR...</div>}
+          <div className="poster-qr-frame">
+            {qr ? <img src={qr} alt="QR ลงทะเบียนร่วมงาน" /> : <div className="empty">กำลังสร้าง QR...</div>}
+          </div>
           <strong>สแกนแล้วเข้าปาร์ตี้เลย</strong>
           <div className="poster-count">{info?.guestCount ?? 0} คนอยู่ในงานแล้ว</div>
         </div>
-        <div className="poster-prizes">
-          <PrizeShowcase mode="teaser" />
-        </div>
+      </div>
+      <div className="poster-prizes">
+        <PrizeShowcase mode="teaser" />
       </div>
 
       <div className="poster-meta">
