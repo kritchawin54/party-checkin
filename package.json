@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host --port 5173",
     "build": "vite build",
-    "start": "tsx server.mjs",
+    "start": "node server.mjs",
     "public": "node scripts/public.mjs",
     "preview": "vite preview --host"
   },

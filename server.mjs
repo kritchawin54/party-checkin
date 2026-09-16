@@ -1,11 +1,9 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { handleApi, sendJson } from "./eventApiCore.ts";
+import { handleApi, sendJson } from "./eventApiCore.mjs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dist = path.join(__dirname, "dist");
+const dist = path.resolve(process.cwd(), "dist");
 const port = Number(process.env.PORT) || 5173;
 
 const MIME = {

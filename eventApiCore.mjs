@@ -1,14 +1,20 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { DEFAULT_SETTINGS, type AppState, type Guest, type Prize } from "./src/types.ts";
 
-const DATA_DIR = path.resolve("data");
+const DEFAULT_SETTINGS = {
+  eventName: "งานเลี้ยง ปาร์ตี้ หน้ากากทักซิโด ยินดีตำแหน่งใหม่ รองด้วง ใหญ่กว่าเดิม",
+  eventDate: "",
+  venue: "โบว์ลิ่ง",
+  teamCount: 4,
+  publicUrl: "",
+};
+
+const DATA_DIR = path.resolve(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "event.json");
 const PUBLIC_FILE = path.join(DATA_DIR, "public-url.txt");
 
-export function emptyState(): AppState {
+export function emptyState() {
   return {
     settings: { ...DEFAULT_SETTINGS },
     guests: [],
@@ -19,10 +25,10 @@ export function emptyState(): AppState {
   };
 }
 
-export function readState(): AppState {
+export function readState() {
   try {
     if (!fs.existsSync(DATA_FILE)) return emptyState();
-    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8")) as AppState;
+    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
     return {
       ...emptyState(),
       ...parsed,
@@ -37,12 +43,12 @@ export function readState(): AppState {
   }
 }
 
-export function writeState(state: AppState) {
+export function writeState(state) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(DATA_FILE, JSON.stringify({ ...state, updatedAt: Date.now() }, null, 2), "utf8");
 }
 
-export function readPublicUrlFile(): string {
+export function readPublicUrlFile() {
   try {
     return fs.existsSync(PUBLIC_FILE) ? fs.readFileSync(PUBLIC_FILE, "utf8").trim() : "";
   } catch {
@@ -50,16 +56,16 @@ export function readPublicUrlFile(): string {
   }
 }
 
-export function writePublicUrlFile(url: string) {
+export function writePublicUrlFile(url) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(PUBLIC_FILE, url.trim(), "utf8");
 }
 
 function lanAddresses() {
-  const out: { name: string; address: string }[] = [];
+  const out = [];
   for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
     for (const addr of addrs ?? []) {
-      const v4 = addr.family === "IPv4" || (addr.family as unknown) === 4;
+      const v4 = addr.family === "IPv4" || addr.family === 4;
       if (!v4 || addr.internal) continue;
       if (addr.address.startsWith("169.254.")) continue;
       out.push({ name, address: addr.address });
@@ -68,26 +74,26 @@ function lanAddresses() {
   return out.sort((a, b) => score(b.address) - score(a.address));
 }
 
-function score(ip: string) {
+function score(ip) {
   if (ip.startsWith("192.168.")) return 3;
   if (ip.startsWith("10.")) return 2;
   return 1;
 }
 
-function joinUrl(base: string) {
+function joinUrl(base) {
   const clean = base.replace(/\/+$/, "");
   return `${clean}/join`;
 }
 
-function isLocalHost(host: string) {
+function isLocalHost(host) {
   const h = host.split(":")[0];
   return h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]";
 }
 
-export function collectJoinUrls(req: IncomingMessage, port: number, state: AppState) {
-  const urls: { name: string; url: string }[] = [];
-  const seen = new Set<string>();
-  const add = (name: string, url: string) => {
+export function collectJoinUrls(req, port, state) {
+  const urls = [];
+  const seen = new Set();
+  const add = (name, url) => {
     if (!url || seen.has(url)) return;
     seen.add(url);
     urls.push({ name, url });
@@ -110,16 +116,16 @@ export function collectJoinUrls(req: IncomingMessage, port: number, state: AppSt
   return urls;
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req) {
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
+    const chunks = [];
     req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
 }
 
-export function sendJson(res: ServerResponse, status: number, data: unknown) {
+export function sendJson(res, status, data) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -128,8 +134,8 @@ export function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
-let queue: Promise<unknown> = Promise.resolve();
-const withLock = <T>(fn: () => T | Promise<T>) => {
+let queue = Promise.resolve();
+const withLock = (fn) => {
   const run = queue.then(fn, fn);
   queue = run.then(
     () => undefined,
@@ -138,11 +144,7 @@ const withLock = <T>(fn: () => T | Promise<T>) => {
   return run;
 };
 
-export async function handleApi(
-  req: IncomingMessage,
-  res: ServerResponse,
-  port: number,
-): Promise<boolean> {
+export async function handleApi(req, res, port) {
   const url = req.url?.split("?")[0] ?? "";
   if (req.method === "OPTIONS" && url.startsWith("/api/")) {
     sendJson(res, 204, {});
@@ -167,14 +169,14 @@ export async function handleApi(
   }
 
   if (url === "/api/state" && req.method === "PUT") {
-    const body = JSON.parse(await readBody(req)) as AppState;
+    const body = JSON.parse(await readBody(req));
     await withLock(() => writeState({ ...emptyState(), ...body }));
     sendJson(res, 200, readState());
     return true;
   }
 
   if (url === "/api/public-url" && req.method === "POST") {
-    const body = JSON.parse(await readBody(req)) as { url?: string };
+    const body = JSON.parse(await readBody(req));
     const next = String(body.url || "").trim().replace(/\/+$/, "");
     writePublicUrlFile(next);
     const state = readState();
@@ -185,7 +187,7 @@ export async function handleApi(
   }
 
   if (url === "/api/guests" && req.method === "POST") {
-    const guest = JSON.parse(await readBody(req)) as Guest;
+    const guest = JSON.parse(await readBody(req));
     if (!guest?.firstName || !guest?.lastName || !guest?.nickname || !guest?.rank) {
       sendJson(res, 400, { error: "กรอกชื่อ นามสกุล ชื่อเล่น และตำแหน่งให้ครบ" });
       return true;
@@ -235,12 +237,12 @@ export async function handleApi(
   }
 
   if (url === "/api/prizes" && req.method === "POST") {
-    const prize = JSON.parse(await readBody(req)) as Prize;
+    const prize = JSON.parse(await readBody(req));
     if (!prize?.name || !prize?.sponsorName) {
       sendJson(res, 400, { error: "กรอกชื่อของรางวัล และชื่อผู้สนับสนุนให้ครบ" });
       return true;
     }
-    const next: Prize = {
+    const next = {
       id: prize.id || `prize-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name: String(prize.name).trim(),
       quantity: Math.max(1, Math.round(Number(prize.quantity) || 1)),

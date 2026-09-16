@@ -1,5 +1,5 @@
 import type { Plugin, ViteDevServer } from "vite";
-import { handleApi, sendJson } from "./eventApiCore";
+import { handleApi, sendJson } from "./eventApiCore.mjs";
 
 function currentPort(server: ViteDevServer) {
   const addr = server.httpServer?.address();
