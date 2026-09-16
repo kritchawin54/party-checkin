@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { DEFAULT_SETTINGS, type AppState, type Guest, type Prize } from "./src/types";
+import { DEFAULT_SETTINGS, type AppState, type Guest, type Prize } from "./src/types.ts";
 
 const DATA_DIR = path.resolve("data");
 const DATA_FILE = path.join(DATA_DIR, "event.json");
