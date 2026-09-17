@@ -1,52 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DATA_DIR, emptyState, ensureStore, readState, storeKind, writeState } from "./eventStore.mjs";
 
-const DEFAULT_SETTINGS = {
-  eventName: "งานเลี้ยง ปาร์ตี้ หน้ากากทักซิโด ยินดีตำแหน่งใหม่ รองด้วง ใหญ่กว่าเดิม",
-  eventDate: "",
-  venue: "โบว์ลิ่ง",
-  teamCount: 4,
-  publicUrl: "",
-};
+export { emptyState, ensureStore, initStore, readState, writeState } from "./eventStore.mjs";
 
-const DATA_DIR = path.resolve(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "event.json");
 const PUBLIC_FILE = path.join(DATA_DIR, "public-url.txt");
-
-export function emptyState() {
-  return {
-    settings: { ...DEFAULT_SETTINGS },
-    guests: [],
-    teams: [],
-    prizes: [],
-    raffleWinners: [],
-    updatedAt: Date.now(),
-  };
-}
-
-export function readState() {
-  try {
-    if (!fs.existsSync(DATA_FILE)) return emptyState();
-    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-    return {
-      ...emptyState(),
-      ...parsed,
-      settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
-      guests: parsed.guests ?? [],
-      teams: parsed.teams ?? [],
-      prizes: parsed.prizes ?? [],
-      raffleWinners: parsed.raffleWinners ?? [],
-    };
-  } catch {
-    return emptyState();
-  }
-}
-
-export function writeState(state) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(DATA_FILE, JSON.stringify({ ...state, updatedAt: Date.now() }, null, 2), "utf8");
-}
 
 export function readPublicUrlFile() {
   try {
@@ -134,6 +93,17 @@ export function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+function mergeById(current = [], incoming = []) {
+  const map = new Map();
+  for (const item of current) {
+    if (item?.id) map.set(item.id, item);
+  }
+  for (const item of incoming) {
+    if (item?.id) map.set(item.id, item);
+  }
+  return [...map.values()];
+}
+
 let queue = Promise.resolve();
 const withLock = (fn) => {
   const run = queue.then(fn, fn);
@@ -151,6 +121,7 @@ export async function handleApi(req, res, port) {
     return true;
   }
   if (!url.startsWith("/api/")) return false;
+  await ensureStore();
 
   if (url === "/api/info" && req.method === "GET") {
     const state = readState();
@@ -158,6 +129,7 @@ export async function handleApi(req, res, port) {
       eventName: state.settings.eventName,
       guestCount: state.guests.length,
       prizeCount: state.prizes.length,
+      persist: storeKind(),
       urls: collectJoinUrls(req, port, state),
     });
     return true;
@@ -170,8 +142,23 @@ export async function handleApi(req, res, port) {
 
   if (url === "/api/state" && req.method === "PUT") {
     const body = JSON.parse(await readBody(req));
-    await withLock(() => writeState({ ...emptyState(), ...body }));
-    sendJson(res, 200, readState());
+    await withLock(async () => {
+      const current = readState();
+      const incoming = { ...emptyState(), ...body };
+      const incomingGuests = incoming.guests ?? [];
+      if (incomingGuests.length === 0 && current.guests.length > 0) {
+        sendJson(res, 200, current);
+        return;
+      }
+      await writeState({
+        ...incoming,
+        guests: mergeById(current.guests, incomingGuests),
+        prizes: mergeById(current.prizes, incoming.prizes ?? []),
+        raffleWinners: mergeById(current.raffleWinners, incoming.raffleWinners ?? []),
+        teams: incoming.teams?.length ? incoming.teams : current.teams,
+      });
+      sendJson(res, 200, readState());
+    });
     return true;
   }
 
@@ -181,7 +168,7 @@ export async function handleApi(req, res, port) {
     writePublicUrlFile(next);
     const state = readState();
     state.settings.publicUrl = next;
-    writeState(state);
+    await writeState(state);
     sendJson(res, 200, { url: next });
     return true;
   }
@@ -192,7 +179,7 @@ export async function handleApi(req, res, port) {
       sendJson(res, 400, { error: "กรอกชื่อ นามสกุล ชื่อเล่น และตำแหน่งให้ครบ" });
       return true;
     }
-    await withLock(() => {
+    await withLock(async () => {
       const state = readState();
       const phone = (guest.phone || "").replace(/\D/g, "");
       const first = guest.firstName.trim().toLowerCase();
@@ -212,7 +199,7 @@ export async function handleApi(req, res, port) {
         return;
       }
       state.guests.push(guest);
-      writeState(state);
+      await writeState(state);
       sendJson(res, 201, guest);
     });
     return true;
@@ -253,10 +240,10 @@ export async function handleApi(req, res, port) {
       source: prize.source === "staff" ? "staff" : "sponsor",
       createdAt: prize.createdAt || new Date().toISOString(),
     };
-    await withLock(() => {
+    await withLock(async () => {
       const state = readState();
       state.prizes.push(next);
-      writeState(state);
+      await writeState(state);
       sendJson(res, 201, next);
     });
     return true;

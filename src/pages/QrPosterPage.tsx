@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { Link } from "react-router-dom";
 import EventTitle from "../components/EventTitle";
 import PrizeShowcase from "../components/PrizeShowcase";
+import { restoreIfServerEmpty } from "../store";
 
 type HostInfo = {
   eventName: string;
@@ -22,6 +23,7 @@ export default function QrPosterPage() {
     let stop = false;
     async function load() {
       try {
+        await restoreIfServerEmpty();
         const res = await fetch("/api/info");
         if (!res.ok) throw new Error("โหลดข้อมูลโฮสต์ไม่ได้");
         const data = (await res.json()) as HostInfo;

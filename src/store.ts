@@ -132,24 +132,32 @@ export function applyRemote(remote: AppState) {
   listeners.forEach((fn) => fn());
 }
 
-export async function startAdminSync() {
+function shouldKeepLocal(remote: AppState) {
+  return (
+    (state.guests.length > 0 && remote.guests.length === 0) ||
+    (state.prizes.length > 0 && remote.prizes.length === 0 && remote.guests.length === 0)
+  );
+}
+
+export async function restoreIfServerEmpty() {
   try {
     const res = await fetch("/api/state");
-    if (res.ok) {
-      const remote = normalizeState((await res.json()) as AppState);
-      const remoteAt = remote.updatedAt ?? 0;
-      const localAt = state.updatedAt ?? 0;
-      if (remoteAt >= localAt && (remote.guests.length > 0 || remote.prizes.length > 0 || remote.raffleWinners.length > 0)) {
-        applyRemote(remote);
-      } else if (state.guests.length > 0 || state.prizes.length > 0) {
-        emit(true);
-      } else {
-        applyRemote(remote);
-      }
+    if (!res.ok) return;
+    const remote = normalizeState((await res.json()) as AppState);
+    if (shouldKeepLocal(remote)) {
+      emit(true);
+      return;
+    }
+    if (remote.guests.length > 0 || remote.prizes.length > 0) {
+      applyRemote(remote);
     }
   } catch {
-    // stay on localStorage
+    // keep local copy
   }
+}
+
+export async function startAdminSync() {
+  await restoreIfServerEmpty();
 
   window.clearInterval(syncTimer);
   syncTimer = window.setInterval(async () => {
@@ -158,6 +166,10 @@ export async function startAdminSync() {
       const res = await fetch("/api/state");
       if (!res.ok) return;
       const remote = normalizeState((await res.json()) as AppState);
+      if (shouldKeepLocal(remote)) {
+        emit(true);
+        return;
+      }
       const remoteAt = remote.updatedAt ?? 0;
       const localAt = state.updatedAt ?? 0;
       const guestsChanged =

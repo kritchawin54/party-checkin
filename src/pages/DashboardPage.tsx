@@ -19,6 +19,7 @@ export default function DashboardPage() {
             {settings.venue ? ` · ${settings.venue}` : ""}
             {settings.eventDate ? ` · ${settings.eventDate}` : ""}
           </p>
+          <p>รายชื่อถูกเก็บในฐานข้อมูล จะไม่หายตอนเว็บหลับ</p>
         </div>
         <div className="row">
           <button className="btn secondary" onClick={downloadJson}>

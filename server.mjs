@@ -1,7 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { handleApi, sendJson } from "./eventApiCore.mjs";
+import { handleApi, sendJson, initStore } from "./eventApiCore.mjs";
 
 const dist = path.resolve(process.cwd(), "dist");
 const port = Number(process.env.PORT) || 5173;
@@ -19,19 +19,40 @@ const MIME = {
   ".woff2": "font/woff2",
 };
 
+function insideDist(filePath) {
+  const rel = path.relative(dist, filePath);
+  return rel === "" || Boolean(rel && !rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
 function sendFile(res, filePath) {
   const ext = path.extname(filePath).toLowerCase();
+  res.statusCode = 200;
   res.setHeader("Content-Type", MIME[ext] || "application/octet-stream");
-  fs.createReadStream(filePath).pipe(res);
+  fs.createReadStream(filePath)
+    .on("error", (err) => {
+      console.error("file error", err);
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.end("file error");
+      }
+    })
+    .pipe(res);
 }
 
 const server = http.createServer(async (req, res) => {
   try {
+    const urlPath = decodeURIComponent((req.url || "/").split("?")[0] || "/");
+    if (urlPath === "/healthz") {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end("ok");
+      return;
+    }
     if (await handleApi(req, res, port)) return;
-    const urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
-    const safePath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
-    let filePath = path.join(dist, safePath === path.sep || safePath === "/" ? "index.html" : safePath);
-    if (!filePath.startsWith(dist)) {
+
+    const relative = urlPath === "/" ? "index.html" : urlPath.replace(/^\/+/, "");
+    let filePath = path.resolve(dist, relative);
+    if (!insideDist(filePath)) {
       res.statusCode = 403;
       res.end("Forbidden");
       return;
@@ -41,17 +62,35 @@ const server = http.createServer(async (req, res) => {
     }
     if (!fs.existsSync(filePath)) {
       res.statusCode = 404;
-      res.end("ยังไม่มีไฟล์เว็บ กรุณา build ก่อน");
+      res.end("missing dist/index.html");
       return;
     }
     sendFile(res, filePath);
   } catch (err) {
+    console.error(err);
     if (!res.headersSent) sendJson(res, 500, { error: String(err) });
   }
 });
 
+server.on("error", (err) => {
+  console.error("server error", err);
+  process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("uncaught", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("unhandled", err);
+});
+
 server.listen(port, "0.0.0.0", () => {
+  console.log(`listening on 0.0.0.0:${port}`);
   console.log(`cwd=${process.cwd()}`);
   console.log(`dist=${dist} exists=${fs.existsSync(path.join(dist, "index.html"))}`);
-  console.log(`เปิดเว็บได้ที่พอร์ต ${port}`);
+});
+
+void initStore().catch((err) => {
+  console.error("store init", err);
 });
