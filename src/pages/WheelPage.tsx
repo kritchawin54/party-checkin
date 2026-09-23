@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import WheelCanvas from "../components/WheelCanvas";
+import WinnerCelebration from "../components/WinnerCelebration";
 import { useAppState } from "../hooks";
 import type { Guest } from "../types";
+import { playCelebrationSound, prepareCelebrationSound } from "../utils/celebrationSound";
 import { SPIN_DURATION_MS, spinToIndex } from "../utils/wheel";
 
 type Pool = "checked" | "all" | "notWon";
@@ -13,6 +15,8 @@ export default function WheelPage() {
   const [spinning, setSpinning] = useState(false);
   const [winner, setWinner] = useState<Guest | null>(null);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const [celebrationKey, setCelebrationKey] = useState(0);
+  const audioRef = useRef<AudioContext | null>(null);
 
   const list = useMemo(() => {
     const won = new Set(raffleWinners.map((w) => w.guestId));
@@ -28,6 +32,7 @@ export default function WheelPage() {
 
   function spin() {
     if (!list.length || spinning) return;
+    audioRef.current = prepareCelebrationSound(audioRef.current);
     setSpinning(true);
     setWinner(null);
     const { index, rotation: next } = spinToIndex(list.length, rotation);
@@ -36,11 +41,14 @@ export default function WheelPage() {
     window.setTimeout(() => {
       setWinner(picked);
       setSpinning(false);
+      setCelebrationKey((key) => key + 1);
+      playCelebrationSound(audioRef.current);
     }, SPIN_DURATION_MS);
   }
 
   return (
     <>
+      {winner ? <WinnerCelebration key={celebrationKey} /> : null}
       <div className="topbar">
         <div>
           <h2>วงล้อสุ่มชื่อ</h2>
