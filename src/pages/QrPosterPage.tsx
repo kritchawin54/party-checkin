@@ -79,7 +79,7 @@ export default function QrPosterPage() {
           <img src="/party/bowtie.svg" alt="" />
         </div>
         <div className="poster-top">
-          <EventTitle />
+          <EventTitle title={info?.eventName} />
           <div className="hero-banner">
             <span className="hero-line">สวมหน้ากาก แล้วเข้างานเลย</span>
             <span className="hero-line accent">🎳 โบว์ลิ่ง  🎡 วงล้อ  🎁 จับฉลาก</span>
@@ -160,7 +160,7 @@ export default function QrPosterPage() {
               <img src="/party/mascot.png" alt="" />
               <img src="/party/bowtie.svg" alt="" />
             </div>
-            <EventTitle size="compact" />
+            <EventTitle size="compact" title={info?.eventName} />
             <div className="popup-qr">
               <div className="ticket-seal">สแกนเข้างาน</div>
               <img src={qr} alt="QR เข้าปาร์ตี้" />
