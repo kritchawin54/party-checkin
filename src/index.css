@@ -152,6 +152,10 @@ a {
   opacity: 0.25;
 }
 
+.party-decor.light .balloons {
+  opacity: 0.35;
+}
+
 .sparks {
   position: absolute;
   inset: 0;
@@ -371,6 +375,8 @@ a {
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 24px;
+  position: relative;
+  z-index: 20;
 }
 
 .topbar h2 {
@@ -389,6 +395,24 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.wheel-controls {
+  position: relative;
+  z-index: 200;
+  padding: 8px;
+  border: 2px solid rgba(255, 229, 102, 0.45);
+  border-radius: 999px;
+  background: rgba(20, 8, 20, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  isolation: isolate;
+}
+
+.wheel-spin-button {
+  position: relative;
+  z-index: 201;
+  min-width: 132px;
+  outline: 3px solid rgba(255, 255, 255, 0.16);
 }
 
 .grid {

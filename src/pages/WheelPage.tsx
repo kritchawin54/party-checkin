@@ -54,13 +54,13 @@ export default function WheelPage() {
           <h2>วงล้อสุ่มชื่อ</h2>
           <p>ใช้สุ่มคนเล่นเกม จับกลุ่มทีละคน หรือสุ่มเรียกขึ้นเวที</p>
         </div>
-        <div className="row">
+        <div className="row wheel-controls">
           <select value={pool} onChange={(e) => setPool(e.target.value as Pool)}>
             <option value="checked">เฉพาะคนเช็คอินแล้ว</option>
             <option value="all">รายชื่อทั้งหมด</option>
             <option value="notWon">เช็คอินแล้วยังไม่เคยได้รางวัล</option>
           </select>
-          <button className="btn" disabled={spinning || list.length === 0} onClick={spin}>
+          <button className="btn wheel-spin-button" disabled={spinning || list.length === 0} onClick={spin}>
             {spinning ? "กำลังหมุน..." : "หมุนวงล้อ"}
           </button>
         </div>
