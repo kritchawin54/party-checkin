@@ -1,12 +1,23 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WheelCanvas from "../components/WheelCanvas";
 import WinnerCelebration from "../components/WinnerCelebration";
 import { useAppState } from "../hooks";
 import type { Guest } from "../types";
 import { playCelebrationSound, prepareCelebrationSound } from "../utils/celebrationSound";
-import { SPIN_DURATION_MS, spinToIndex } from "../utils/wheel";
+import { spinToChosenIndex } from "../utils/wheel";
 
 type Pool = "checked" | "all" | "notWon";
+type LiveStatus = "connecting" | "live" | "offline";
+
+type WheelSpinEvent = {
+  id: string;
+  startsAt: number;
+  durationMs: number;
+  fullTurns: number;
+  pool: Pool;
+  candidates: Guest[];
+  winnerId: string;
+};
 
 export default function WheelPage() {
   const { guests, raffleWinners } = useAppState();
@@ -16,7 +27,15 @@ export default function WheelPage() {
   const [winner, setWinner] = useState<Guest | null>(null);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [celebrationKey, setCelebrationKey] = useState(0);
+  const [syncedList, setSyncedList] = useState<Guest[] | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
+  const [soundReady, setSoundReady] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
+  const rotationRef = useRef(0);
+  const activeEventId = useRef("");
+  const startTimer = useRef<number | undefined>(undefined);
+  const resultTimer = useRef<number | undefined>(undefined);
 
   const list = useMemo(() => {
     const won = new Set(raffleWinners.map((w) => w.guestId));
@@ -28,22 +47,81 @@ export default function WheelPage() {
     });
   }, [guests, pool, raffleWinners, removedIds]);
 
-  const visualLabels = list.map((g) => g.nickname || g.name);
+  const activeList = syncedList ?? list;
+  const visualLabels = activeList.map((g) => g.nickname || g.name);
 
-  function spin() {
-    if (!list.length || spinning) return;
+  function enableSound() {
     audioRef.current = prepareCelebrationSound(audioRef.current);
+    setSoundReady(true);
+  }
+
+  const runWheelEvent = useCallback((event: WheelSpinEvent) => {
+    if (!event.id || activeEventId.current === event.id || !event.candidates.length) return;
+    const winnerIndex = event.candidates.findIndex((guest) => guest.id === event.winnerId);
+    if (winnerIndex < 0) return;
+
+    activeEventId.current = event.id;
+    window.clearTimeout(startTimer.current);
+    window.clearTimeout(resultTimer.current);
+    setPool(event.pool);
+    setSyncedList(event.candidates);
     setSpinning(true);
     setWinner(null);
-    const { index, rotation: next } = spinToIndex(list.length, rotation);
-    const picked = list[index];
-    setRotation(next);
-    window.setTimeout(() => {
+    const picked = event.candidates[winnerIndex];
+    const { rotation: next } = spinToChosenIndex(
+      event.candidates.length,
+      rotationRef.current,
+      winnerIndex,
+      event.fullTurns,
+    );
+    rotationRef.current = next;
+    const delay = Math.max(0, event.startsAt - Date.now());
+    startTimer.current = window.setTimeout(() => setRotation(next), delay);
+    resultTimer.current = window.setTimeout(() => {
       setWinner(picked);
       setSpinning(false);
       setCelebrationKey((key) => key + 1);
       playCelebrationSound(audioRef.current);
-    }, SPIN_DURATION_MS);
+    }, delay + event.durationMs);
+  }, []);
+
+  useEffect(() => {
+    const events = new EventSource("/api/wheel/events");
+    events.onopen = () => setLiveStatus("live");
+    events.onerror = () => setLiveStatus("offline");
+    const onSpin = (message: MessageEvent<string>) => {
+      try {
+        runWheelEvent(JSON.parse(message.data) as WheelSpinEvent);
+      } catch {
+        // ignore malformed events and wait for the next command
+      }
+    };
+    events.addEventListener("wheel-spin", onSpin as EventListener);
+    return () => {
+      events.close();
+      window.clearTimeout(startTimer.current);
+      window.clearTimeout(resultTimer.current);
+    };
+  }, [runWheelEvent]);
+
+  async function spin() {
+    if (!activeList.length || spinning || requesting) return;
+    enableSound();
+    setRequesting(true);
+    try {
+      const res = await fetch("/api/wheel/spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pool, candidateIds: activeList.map((guest) => guest.id) }),
+      });
+      const body = (await res.json()) as WheelSpinEvent & { error?: string };
+      if (!res.ok) throw new Error(body.error || "สั่งหมุนวงล้อไม่สำเร็จ");
+      runWheelEvent(body);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRequesting(false);
+    }
   }
 
   return (
@@ -52,7 +130,7 @@ export default function WheelPage() {
       <div className="topbar">
         <div>
           <h2>วงล้อสุ่มชื่อ</h2>
-          <p>ใช้สุ่มคนเล่นเกม จับกลุ่มทีละคน หรือสุ่มเรียกขึ้นเวที</p>
+          <p>กดจากมือถือหรือเครื่องใดก็ได้ ทุกจอจะหมุนและแสดงผลเดียวกัน</p>
         </div>
       </div>
 
@@ -61,13 +139,32 @@ export default function WheelPage() {
           <div className="wheel-pointer" />
           <WheelCanvas labels={visualLabels} rotation={rotation} spinning={spinning} />
           <div className="row wheel-controls wheel-controls-below">
-            <select value={pool} onChange={(e) => setPool(e.target.value as Pool)}>
+            <select
+              value={pool}
+              disabled={spinning}
+              onChange={(e) => {
+                setPool(e.target.value as Pool);
+                setSyncedList(null);
+              }}
+            >
               <option value="checked">เฉพาะคนเช็คอินแล้ว</option>
               <option value="all">รายชื่อทั้งหมด</option>
               <option value="notWon">เช็คอินแล้วยังไม่เคยได้รางวัล</option>
             </select>
-            <button className="btn wheel-spin-button" disabled={spinning || list.length === 0} onClick={spin}>
-              {spinning ? "กำลังหมุน..." : "หมุนวงล้อ"}
+            <button
+              className="btn wheel-spin-button"
+              disabled={spinning || requesting || activeList.length === 0}
+              onClick={spin}
+            >
+              {spinning ? "กำลังหมุนพร้อมกัน..." : requesting ? "กำลังส่งคำสั่ง..." : "หมุนวงล้อทุกจอ"}
+            </button>
+          </div>
+          <div className="wheel-live-row">
+            <span className={`wheel-live-status ${liveStatus}`}>
+              {liveStatus === "live" ? "● เชื่อมต่อเรียลไทม์แล้ว" : liveStatus === "connecting" ? "● กำลังเชื่อมต่อ..." : "● กำลังเชื่อมต่อใหม่..."}
+            </span>
+            <button className={`btn secondary sound-enable ${soundReady ? "ready" : ""}`} onClick={enableSound}>
+              {soundReady ? "🔊 เปิดเสียงแล้ว" : "🔈 กดเปิดเสียงเครื่องนี้"}
             </button>
           </div>
         </div>
@@ -81,7 +178,13 @@ export default function WheelPage() {
                 {winner.rank ? ` · ${winner.rank}` : ""}
               </p>
               <div className="row" style={{ justifyContent: "center" }}>
-                <button className="btn secondary" onClick={() => setRemovedIds((ids) => [...ids, winner.id])}>
+                <button
+                  className="btn secondary"
+                  onClick={() => {
+                    setRemovedIds((ids) => [...ids, winner.id]);
+                    setSyncedList((current) => current?.filter((guest) => guest.id !== winner.id) ?? null);
+                  }}
+                >
                   เอาออกจากวงล้อรอบนี้
                 </button>
                 <button className="btn" onClick={spin} disabled={spinning}>

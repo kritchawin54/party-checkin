@@ -411,7 +411,7 @@ a {
 .wheel-controls-below {
   justify-content: center;
   margin-top: 18px;
-  width: min(100%, 440px);
+  width: min(100%, 520px);
 }
 
 .wheel-spin-button {
@@ -419,6 +419,46 @@ a {
   z-index: 201;
   min-width: 132px;
   outline: 3px solid rgba(255, 255, 255, 0.16);
+}
+
+.wheel-live-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.wheel-live-status {
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(20, 8, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+}
+
+.wheel-live-status.live {
+  color: var(--lime);
+}
+
+.wheel-live-status.connecting {
+  color: var(--gold);
+}
+
+.wheel-live-status.offline {
+  color: var(--orange);
+}
+
+.sound-enable {
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.sound-enable.ready {
+  border-color: rgba(182, 255, 106, 0.72);
+  color: var(--lime);
 }
 
 .grid {

@@ -6,6 +6,22 @@ import { DATA_DIR, emptyState, ensureStore, readState, storeKind, writeState } f
 export { emptyState, ensureStore, initStore, readState, writeState } from "./eventStore.mjs";
 
 const PUBLIC_FILE = path.join(DATA_DIR, "public-url.txt");
+const wheelClients = new Set();
+let wheelBusyUntil = 0;
+
+function sendWheelEvent(res, event) {
+  res.write(`event: wheel-spin\ndata: ${JSON.stringify(event)}\n\n`);
+}
+
+function broadcastWheelEvent(event) {
+  for (const client of wheelClients) {
+    try {
+      sendWheelEvent(client, event);
+    } catch {
+      wheelClients.delete(client);
+    }
+  }
+}
 
 export function readPublicUrlFile() {
   try {
@@ -159,6 +175,62 @@ export async function handleApi(req, res, port) {
       });
       sendJson(res, 200, readState());
     });
+    return true;
+  }
+
+  if (url === "/api/wheel/events" && req.method === "GET") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.flushHeaders?.();
+    res.write(": connected\n\n");
+    wheelClients.add(res);
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(": heartbeat\n\n");
+      } catch {
+        clearInterval(heartbeat);
+        wheelClients.delete(res);
+      }
+    }, 20000);
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      wheelClients.delete(res);
+    });
+    return true;
+  }
+
+  if (url === "/api/wheel/spin" && req.method === "POST") {
+    if (Date.now() < wheelBusyUntil) {
+      sendJson(res, 409, { error: "วงล้อกำลังหมุนอยู่ กรุณารอผลรอบนี้" });
+      return true;
+    }
+    const body = JSON.parse((await readBody(req)) || "{}");
+    const requestedIds = Array.isArray(body.candidateIds) ? body.candidateIds.map(String) : [];
+    const current = readState();
+    const byId = new Map(current.guests.map((guest) => [guest.id, guest]));
+    const candidates = requestedIds.map((id) => byId.get(id)).filter(Boolean);
+    if (!candidates.length) {
+      sendJson(res, 400, { error: "ไม่มีรายชื่อสำหรับหมุนวงล้อ" });
+      return true;
+    }
+    const winnerIndex = Math.floor(Math.random() * candidates.length);
+    const now = Date.now();
+    const event = {
+      id: `wheel-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      startsAt: now + 650,
+      durationMs: 12300,
+      fullTurns: 15 + Math.floor(Math.random() * 7),
+      pool: ["checked", "all", "notWon"].includes(body.pool) ? body.pool : "checked",
+      candidates,
+      winnerId: candidates[winnerIndex].id,
+    };
+    wheelBusyUntil = event.startsAt + event.durationMs + 500;
+    broadcastWheelEvent(event);
+    sendJson(res, 200, event);
     return true;
   }
 
