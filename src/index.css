@@ -144,9 +144,12 @@ a {
   animation-delay: 1s;
 }
 
-.party-decor.light .bowling,
+.party-decor.light .bowling {
+  display: none;
+}
+
 .party-decor.light .mask-left {
-  opacity: 0.7;
+  opacity: 0.25;
 }
 
 .sparks {
