@@ -49,7 +49,7 @@ export default function BowlingPage() {
     <>
       <div className="topbar">
         <div>
-          <h2>จับกลุ่มโบว์ลิ่ง</h2>
+          <h2>จับกลุ่ม ทำกิจกรรม</h2>
           <p>หัวหน้าทีมเป็นผู้ใหญ่ (ยศสูงก่อน) ที่เหลือคละยศแบบเฉลี่ยทุกทีม</p>
         </div>
         <div className="row">
@@ -82,7 +82,7 @@ export default function BowlingPage() {
       </div>
 
       {summary.length === 0 ? (
-        <div className="card empty">กดจับกลุ่มใหม่เพื่อแบ่งทีมแข่งขันโบว์ลิ่ง</div>
+        <div className="card empty">กดจับกลุ่มใหม่เพื่อแบ่งทีมทำกิจกรรม</div>
       ) : (
         <div className="grid cards-3">
           {summary.map(({ team, members, avg, adults }) => {

@@ -24,7 +24,7 @@ const links = [
   { to: "/register", label: "✍️ กรอกแทนแขก" },
   { to: "/qr", label: "📷 QR รายคน" },
   { to: "/wheel", label: "🎡 วงล้อ" },
-  { to: "/bowling", label: "🎳 จับกลุ่มโบว์ลิ่ง" },
+  { to: "/bowling", label: "🎯 จับกลุ่ม ทำกิจกรรม" },
   { to: "/prizes", label: "🎁 สนับสนุน ของรางวัล" },
   { to: "/raffle", label: "🎲 จับฉลากรางวัล" },
 ];
