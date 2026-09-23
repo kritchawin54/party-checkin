@@ -19,11 +19,6 @@ type SparkStyle = CSSProperties & {
 export default function WinnerCelebration() {
   return (
     <div className="winner-celebration" aria-hidden="true">
-      <div className="celebration-message">
-        <span>🎉</span>
-        <strong>ปัง! ปัง! ปัง!</strong>
-        <span>🧨</span>
-      </div>
       {BURSTS.flatMap((burst, burstIndex) =>
         Array.from({ length: 18 }, (_, sparkIndex) => {
           const angle = (Math.PI * 2 * sparkIndex) / 18;
