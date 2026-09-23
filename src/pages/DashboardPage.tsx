@@ -1,5 +1,5 @@
 import { useAppState } from "../hooks";
-import { downloadJson, importJson, setState } from "../store";
+import { downloadJson, importJson, resetForNewEvent, setState } from "../store";
 import { Link } from "react-router-dom";
 
 export default function DashboardPage() {
@@ -19,9 +19,27 @@ export default function DashboardPage() {
             {settings.venue ? ` · ${settings.venue}` : ""}
             {settings.eventDate ? ` · ${settings.eventDate}` : ""}
           </p>
-          <p>รายชื่อถูกเก็บในฐานข้อมูล จะไม่หายตอนเว็บหลับ</p>
+          <p>รายชื่อถูกเก็บในฐานข้อมูล จะไม่หายตอนเว็บหลับ ถ้าจะเริ่มงานใหม่ กดปุ่มชมพูด้านขวา</p>
         </div>
         <div className="row">
+          <button
+            className="btn wine"
+            onClick={() => {
+              if (
+                !confirm(
+                  `สำรองข้อมูลเมื่อวาน แล้วลบรายชื่อ ${guests.length} คน เพื่อลงทะเบียนงานใหม่?\n\nทีมโบว์ลิ่งและผลจับฉลากจะถูกล้าง ของรางวัลยังอยู่`,
+                )
+              ) {
+                return;
+              }
+              downloadJson();
+              resetForNewEvent({ clearPrizes: false })
+                .then(() => alert("เริ่มงานใหม่แล้ว พร้อมลงทะเบียนแขกชุดใหม่"))
+                .catch((err) => alert(String(err)));
+            }}
+          >
+            เริ่มงานใหม่
+          </button>
           <button className="btn secondary" onClick={downloadJson}>
             สำรองข้อมูล
           </button>

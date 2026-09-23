@@ -162,6 +162,29 @@ export async function handleApi(req, res, port) {
     return true;
   }
 
+  if (url === "/api/reset" && req.method === "POST") {
+    let body = {};
+    try {
+      const raw = (await readBody(req)).trim();
+      body = raw ? JSON.parse(raw) : {};
+    } catch {
+      body = {};
+    }
+    await withLock(async () => {
+      const current = readState();
+      await writeState({
+        settings: current.settings,
+        guests: [],
+        teams: [],
+        prizes: body.clearPrizes ? [] : current.prizes,
+        raffleWinners: [],
+        groupedAt: undefined,
+      });
+      sendJson(res, 200, readState());
+    });
+    return true;
+  }
+
   if (url === "/api/public-url" && req.method === "POST") {
     const body = JSON.parse(await readBody(req));
     const next = String(body.url || "").trim().replace(/\/+$/, "");

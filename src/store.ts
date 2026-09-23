@@ -133,6 +133,9 @@ export function applyRemote(remote: AppState) {
 }
 
 function shouldKeepLocal(remote: AppState) {
+  const remoteAt = remote.updatedAt ?? 0;
+  const localAt = state.updatedAt ?? 0;
+  if (remoteAt >= localAt) return false;
   return (
     (state.guests.length > 0 && remote.guests.length === 0) ||
     (state.prizes.length > 0 && remote.prizes.length === 0 && remote.guests.length === 0)
@@ -266,4 +269,18 @@ export function importJson(file: File): Promise<void> {
 export function resetAll() {
   state = emptyState();
   emit(true);
+}
+
+export async function resetForNewEvent(options: { clearPrizes?: boolean } = {}) {
+  const res = await fetch("/api/reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clearPrizes: Boolean(options.clearPrizes) }),
+  });
+  if (!res.ok) {
+    throw new Error("รีเซตบนเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่");
+  }
+  const remote = normalizeState((await res.json()) as AppState);
+  lastLocalWrite = Date.now();
+  applyRemote(remote);
 }
