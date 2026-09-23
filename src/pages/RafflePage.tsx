@@ -20,18 +20,16 @@ export default function RafflePage() {
     const won = new Set(raffleWinners.map((w) => w.guestId));
     return guests.filter((g) => g.checkedIn && !won.has(g.id));
   }, [guests, raffleWinners]);
-  const visualLabels =
-    pool.length <= 18 ? pool.map((g) => g.nickname || g.name) : Array.from({ length: 12 }, (_, i) => `สุ่ม ${i + 1}`);
+  const visualLabels = pool.map((g) => g.nickname || g.name);
 
   function spin() {
     if (!selected || remainingOf(selected) <= 0 || !pool.length || spinning) return;
     setSpinning(true);
     setLastWinner(null);
-    const pick = Math.floor(Math.random() * pool.length);
-    const { rotation: next } = spinToIndex(visualLabels.length, rotation);
+    const { index, rotation: next } = spinToIndex(pool.length, rotation);
+    const guest = pool[index];
     setRotation(next);
     window.setTimeout(() => {
-      const guest = pool[pick];
       setState({
         raffleWinners: [
           {

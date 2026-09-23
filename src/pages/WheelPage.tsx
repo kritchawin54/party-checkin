@@ -24,18 +24,17 @@ export default function WheelPage() {
     });
   }, [guests, pool, raffleWinners, removedIds]);
 
-  const visualLabels =
-    list.length <= 18 ? list.map((g) => g.nickname || g.name) : Array.from({ length: 12 }, (_, i) => `สุ่ม ${i + 1}`);
+  const visualLabels = list.map((g) => g.nickname || g.name);
 
   function spin() {
     if (!list.length || spinning) return;
     setSpinning(true);
     setWinner(null);
-    const pick = Math.floor(Math.random() * list.length);
-    const { rotation: next } = spinToIndex(visualLabels.length, rotation);
+    const { index, rotation: next } = spinToIndex(list.length, rotation);
+    const picked = list[index];
     setRotation(next);
     window.setTimeout(() => {
-      setWinner(list[pick]);
+      setWinner(picked);
       setSpinning(false);
     }, SPIN_DURATION_MS);
   }
