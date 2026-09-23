@@ -667,7 +667,7 @@ th {
   box-shadow: 0 10px 40px rgba(255, 229, 102, 0.65);
   font-size: clamp(20px, 4vw, 38px);
   transform: translate(-50%, -50%) scale(0);
-  animation: celebration-pop 1.8s ease-out forwards;
+  animation: celebration-pop 5s ease-out forwards;
 }
 
 .celebration-message span {
