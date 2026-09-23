@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import WheelCanvas from "../components/WheelCanvas";
 import { useAppState } from "../hooks";
 import type { Guest } from "../types";
-import { spinToIndex } from "../utils/wheel";
+import { SPIN_DURATION_MS, spinToIndex } from "../utils/wheel";
 
 type Pool = "checked" | "all" | "notWon";
 
@@ -37,7 +37,7 @@ export default function WheelPage() {
     window.setTimeout(() => {
       setWinner(list[pick]);
       setSpinning(false);
-    }, 4200);
+    }, SPIN_DURATION_MS);
   }
 
   return (

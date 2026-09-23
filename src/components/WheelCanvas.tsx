@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { SPIN_DURATION_SECONDS } from "../utils/wheel";
 
 type Slice = { label: string; color: string };
 
@@ -73,7 +74,7 @@ export default function WheelCanvas({ labels, rotation, size = 440, spinning = f
       ref={ref}
       style={{
         transform: `rotate(${rotation}deg)`,
-        transition: spinning ? "transform 4.1s cubic-bezier(0.12, 0.7, 0.08, 1)" : "none",
+        transition: spinning ? `transform ${SPIN_DURATION_SECONDS}s cubic-bezier(0.12, 0.7, 0.08, 1)` : "none",
       }}
     />
   );

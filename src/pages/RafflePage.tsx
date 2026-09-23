@@ -4,7 +4,7 @@ import WheelCanvas from "../components/WheelCanvas";
 import { useAppState } from "../hooks";
 import { setState, uid } from "../store";
 import { downloadText } from "../utils/csv";
-import { spinToIndex } from "../utils/wheel";
+import { SPIN_DURATION_MS, spinToIndex } from "../utils/wheel";
 import { prizeLabel, type Prize } from "../types";
 
 export default function RafflePage() {
@@ -46,7 +46,7 @@ export default function RafflePage() {
       });
       setLastWinner(guest.nickname || guest.name);
       setSpinning(false);
-    }, 4200);
+    }, SPIN_DURATION_MS);
   }
 
   return (
