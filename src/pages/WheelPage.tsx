@@ -3,7 +3,11 @@ import WheelCanvas from "../components/WheelCanvas";
 import WinnerCelebration from "../components/WinnerCelebration";
 import { useAppState } from "../hooks";
 import type { Guest } from "../types";
-import { playCelebrationSound, prepareCelebrationSound } from "../utils/celebrationSound";
+import {
+  playCelebrationSound,
+  prepareCelebrationSound,
+  startWheelSpinSound,
+} from "../utils/celebrationSound";
 import { spinToChosenIndex } from "../utils/wheel";
 
 type Pool = "checked" | "all" | "notWon";
@@ -36,6 +40,7 @@ export default function WheelPage() {
   const activeEventId = useRef("");
   const startTimer = useRef<number | undefined>(undefined);
   const resultTimer = useRef<number | undefined>(undefined);
+  const stopSpinSound = useRef<() => void>(() => undefined);
 
   const list = useMemo(() => {
     const won = new Set(raffleWinners.map((w) => w.guestId));
@@ -63,6 +68,7 @@ export default function WheelPage() {
     activeEventId.current = event.id;
     window.clearTimeout(startTimer.current);
     window.clearTimeout(resultTimer.current);
+    stopSpinSound.current();
     setPool(event.pool);
     setSyncedList(event.candidates);
     setSpinning(true);
@@ -76,8 +82,10 @@ export default function WheelPage() {
     );
     rotationRef.current = next;
     const delay = Math.max(0, event.startsAt - Date.now());
+    stopSpinSound.current = startWheelSpinSound(audioRef.current, delay, event.durationMs);
     startTimer.current = window.setTimeout(() => setRotation(next), delay);
     resultTimer.current = window.setTimeout(() => {
+      stopSpinSound.current();
       setWinner(picked);
       setSpinning(false);
       setCelebrationKey((key) => key + 1);
@@ -99,6 +107,7 @@ export default function WheelPage() {
     events.addEventListener("wheel-spin", onSpin as EventListener);
     return () => {
       events.close();
+      stopSpinSound.current();
       window.clearTimeout(startTimer.current);
       window.clearTimeout(resultTimer.current);
     };
