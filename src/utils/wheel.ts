@@ -6,7 +6,8 @@ const POINTER_DEG = 270;
 export function spinToIndex(count: number, currentRotation: number) {
   const index = Math.floor(Math.random() * count);
   const slice = 360 / count;
-  const extra = (1800 + Math.random() * 720) * 3;
+  const fullTurns = 15 + Math.floor(Math.random() * 7);
+  const extra = fullTurns * 360;
   const center = index * slice + slice / 2;
   const landed = (POINTER_DEG - center + 360) % 360;
   const current = ((currentRotation % 360) + 360) % 360;
