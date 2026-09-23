@@ -408,6 +408,12 @@ a {
   isolation: isolate;
 }
 
+.wheel-controls-below {
+  justify-content: center;
+  margin-top: 18px;
+  width: min(100%, 440px);
+}
+
 .wheel-spin-button {
   position: relative;
   z-index: 201;
